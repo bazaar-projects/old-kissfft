@@ -1,3 +1,11 @@
+all:
+	gcc -Wall -fPIC -c *.c -Dkiss_fft_scalar=float -o kiss_fft.o 
+	gcc -shared -Wl,-soname,libkissfft.so -o libkissfft.so kiss_fft.o
+	rustc -L./ -O --link-args '-lkissfft' kissfft.rs
+
+testSO:
+	gcc -o doit ./test/test_vs_dft.c -I./ -lm -Wall -lkissfft
+
 KFVER=130
 
 doc:
@@ -20,6 +28,7 @@ tarball: clean
 	hg archive -r v$(KFVER) -t zip kiss_fft$(KFVER).zip
 
 clean:
+	rm -f kissfft *so *o
 	cd test && make clean
 	cd tools && make clean
 	rm -f kiss_fft*.tar.gz *~ *.pyc kiss_fft*.zip 
