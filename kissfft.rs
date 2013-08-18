@@ -1,7 +1,6 @@
 extern mod extra;
 
 use extra::complex;
-use extra::time;
 use std::ptr;
 use std::libc::{c_int, size_t};
 use std::vec;
@@ -15,7 +14,7 @@ extern {
 	fn kiss_fft_cleanup();
 }
 
-pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
+pub fn FFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
 	let len = din.len();
 	let mut fout: ~[complex::Cmplx<f32>] = ~[];
 	fout.reserve(len);
@@ -25,7 +24,20 @@ pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
 		kiss_fft(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
 		kiss_fft_cleanup();
 	}
-	return fout;
+	return fout.iter().map(|&x| x.scale(1f32/(len as f32))).collect();
+}
+
+pub fn iFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
+	let len = din.len();
+	let mut fout: ~[complex::Cmplx<f32>] = ~[];
+	fout.reserve(len);
+	unsafe {
+		vec::raw::set_len(&mut fout, len);
+		let kiss_fft_cfg: *mut ~[u8] = kiss_fft_alloc(len as i32, 1, ptr::null(), ptr::null());
+		kiss_fft(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
+		kiss_fft_cleanup();
+	}
+	return fout.iter().map(|&x| x.scale(len as f32)).collect();
 }
 
 pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<f32>]>, comm::Chan<~[complex::Cmplx<f32>]>) {
@@ -51,7 +63,7 @@ pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<
 			unsafe {
 				kiss_fft(cast::transmute(vec::raw::to_mut_ptr(kissFFTState)), vec::raw::to_ptr(din), vec::raw::to_mut_ptr(din));
 			}
-			cout.send(din.iter().transform(|&x| x.scale(1.0/(blockSize as f32))).collect());
+			cout.send(din.iter().map(|&x| x.scale(1.0/(blockSize as f32))).collect());
 		}
 		unsafe { kiss_fft_cleanup(); }
 	}
