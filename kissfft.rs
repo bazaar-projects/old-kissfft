@@ -1,6 +1,7 @@
 extern mod extra;
 
 use extra::complex;
+use extra::time;
 use std::ptr;
 use std::libc::{c_int, size_t};
 use std::vec;
@@ -8,36 +9,32 @@ use std::comm;
 use std::cast;
 use std::task;
 
-extern {
-	fn kiss_fft_alloc(nfft: c_int, inverse_fft: c_int, mem: *u8, lenmem: *size_t) -> *mut ~[u8];
-	fn kiss_fft(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut complex::Cmplx<f32>);
-	fn kiss_fft_cleanup();
+#[link_args = "-lkissfft"] extern {}
+
+externfn!(fn kiss_fft_alloc(nfft: c_int, inverse_fft: c_int, mem: *u8, lenmem: *size_t) -> *mut ~[u8])
+extern {fn kiss_fft(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut complex::Cmplx<f32>);}
+
+externfn!(fn kiss_fft_cleanup())
+
+fn kissFFTWorker(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut complex::Cmplx<f32>){
+	#[fixed_stack_segment]; #[inline(never)];
+	unsafe {
+	kiss_fft(cfg, fin, fout);
+	}
 }
 
-pub fn FFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
+pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
+	#[fixed_stack_segment]; #[inline(never)];
 	let len = din.len();
 	let mut fout: ~[complex::Cmplx<f32>] = ~[];
 	fout.reserve(len);
 	unsafe {
 		vec::raw::set_len(&mut fout, len);
 		let kiss_fft_cfg: *mut ~[u8] = kiss_fft_alloc(len as i32, 0, ptr::null(), ptr::null());
-		kiss_fft(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
+		kissFFTWorker(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
 		kiss_fft_cleanup();
 	}
-	return fout.iter().map(|&x| x.scale(1f32/(len as f32))).collect();
-}
-
-pub fn iFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
-	let len = din.len();
-	let mut fout: ~[complex::Cmplx<f32>] = ~[];
-	fout.reserve(len);
-	unsafe {
-		vec::raw::set_len(&mut fout, len);
-		let kiss_fft_cfg: *mut ~[u8] = kiss_fft_alloc(len as i32, 1, ptr::null(), ptr::null());
-		kiss_fft(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
-		kiss_fft_cleanup();
-	}
-	return fout.iter().map(|&x| x.scale(len as f32)).collect();
+	return fout;
 }
 
 pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<f32>]>, comm::Chan<~[complex::Cmplx<f32>]>) {
@@ -61,9 +58,9 @@ pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<
 			assert_eq!(din.len(), blockSize as uint);
 			//out.reserve(blockSize as uint);
 			unsafe {
-				kiss_fft(cast::transmute(vec::raw::to_mut_ptr(kissFFTState)), vec::raw::to_ptr(din), vec::raw::to_mut_ptr(din));
+			kissFFTWorker(cast::transmute(vec::raw::to_mut_ptr(kissFFTState)), vec::raw::to_ptr(din), vec::raw::to_mut_ptr(din));
 			}
-			cout.send(din.iter().map(|&x| x.scale(1.0/(blockSize as f32))).collect());
+			cout.send(din.iter().map(|&x: &complex::Complex32| x.scale(1.0/(blockSize as f32))).collect());
 		}
 		unsafe { kiss_fft_cleanup(); }
 	}
