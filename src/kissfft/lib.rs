@@ -1,7 +1,6 @@
 extern mod extra;
 
 use extra::complex;
-use extra::time;
 use std::ptr;
 use std::libc::{c_int, size_t};
 use std::vec;
@@ -31,6 +30,19 @@ pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
 	unsafe {
 		vec::raw::set_len(&mut fout, len);
 		let kiss_fft_cfg: *mut ~[u8] = kiss_fft_alloc(len as i32, 0, ptr::null(), ptr::null());
+		kissFFTWorker(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
+		kiss_fft_cleanup();
+	}
+	return fout;
+}
+pub fn kissiFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
+	#[fixed_stack_segment]; #[inline(never)];
+	let len = din.len();
+	let mut fout: ~[complex::Cmplx<f32>] = ~[];
+	fout.reserve(len);
+	unsafe {
+		vec::raw::set_len(&mut fout, len);
+		let kiss_fft_cfg: *mut ~[u8] = kiss_fft_alloc(len as i32, 1, ptr::null(), ptr::null());
 		kissFFTWorker(kiss_fft_cfg, vec::raw::to_ptr(din), vec::raw::to_mut_ptr(fout));
 		kiss_fft_cleanup();
 	}
