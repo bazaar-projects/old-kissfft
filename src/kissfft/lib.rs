@@ -15,7 +15,7 @@ extern {fn kiss_fft(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut c
 
 externfn!(fn kiss_fft_cleanup())
 
-fn kissFFTWorker(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut complex::Cmplx<f32>){
+fn kissFFTWorker(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, fout: *mut complex::Cmplx<f32>){
 	#[fixed_stack_segment]; #[inline(never)];
 	unsafe {
 	kiss_fft(cfg, fin, fout);
