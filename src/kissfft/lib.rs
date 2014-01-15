@@ -10,22 +10,21 @@ use std::task;
 
 #[link_args = "-lkissfft"] extern {}
 
-externfn!(fn kiss_fft_alloc(nfft: c_int, inverse_fft: c_int, mem: *u8, lenmem: *size_t) -> *mut ~[u8])
-extern {fn kiss_fft(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, mut fout: *mut complex::Cmplx<f32>);}
+extern "C" {
+	fn kiss_fft_alloc(nfft: c_int, inverse_fft: c_int, mem: *u8, lenmem: *size_t) -> *mut ~[u8];
+	fn kiss_fft(cfg: *mut ~[u8], fin: *complex::Cmplx<f64>, mut fout: *mut complex::Cmplx<f64>);
+	fn kiss_fft_cleanup();
+}
 
-externfn!(fn kiss_fft_cleanup())
-
-fn kissFFTWorker(cfg: *mut ~[u8], fin: *complex::Cmplx<f32>, fout: *mut complex::Cmplx<f32>){
-	#[fixed_stack_segment]; #[inline(never)];
+fn kissFFTWorker(cfg: *mut ~[u8], fin: *complex::Cmplx<f64>, fout: *mut complex::Cmplx<f64>){
 	unsafe {
 	kiss_fft(cfg, fin, fout);
 	}
 }
 
-pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
-	#[fixed_stack_segment]; #[inline(never)];
+pub fn kissFFT(din: ~[complex::Cmplx<f64>]) -> ~[complex::Cmplx<f64>] {
 	let len = din.len();
-	let mut fout: ~[complex::Cmplx<f32>] = ~[];
+	let mut fout: ~[complex::Cmplx<f64>] = ~[];
 	fout.reserve(len);
 	unsafe {
 		vec::raw::set_len(&mut fout, len);
@@ -35,10 +34,9 @@ pub fn kissFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
 	}
 	return fout;
 }
-pub fn kissiFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
-	#[fixed_stack_segment]; #[inline(never)];
+pub fn kissiFFT(din: ~[complex::Cmplx<f64>]) -> ~[complex::Cmplx<f64>] {
 	let len = din.len();
-	let mut fout: ~[complex::Cmplx<f32>] = ~[];
+	let mut fout: ~[complex::Cmplx<f64>] = ~[];
 	fout.reserve(len);
 	unsafe {
 		vec::raw::set_len(&mut fout, len);
@@ -49,9 +47,9 @@ pub fn kissiFFT(din: ~[complex::Cmplx<f32>]) -> ~[complex::Cmplx<f32>] {
 	return fout;
 }
 
-pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<f32>]>, comm::Chan<~[complex::Cmplx<f32>]>) {
-	let (pin, cin): (comm::Port<~[complex::Complex32]>, comm::Chan<~[complex::Complex32]>) = comm::stream();
-	let (pout, cout): (comm::Port<~[complex::Complex32]>, comm::Chan<~[complex::Complex32]>) = comm::stream();
+pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<f64>]>, comm::Chan<~[complex::Cmplx<f64>]>) {
+	let (pin, cin): (comm::Port<~[complex::Complex64]>, comm::Chan<~[complex::Complex64]>) = comm::stream();
+	let (pout, cout): (comm::Port<~[complex::Complex64]>, comm::Chan<~[complex::Complex64]>) = comm::stream();
 	do task::spawn_sched(task::SingleThreaded) {
 		let mut kissFFTState: ~[u8] = ~[];
 		unsafe {
@@ -64,15 +62,14 @@ pub fn buildFFTBlock(blockSize: u64, fwd: bool) -> (comm::Port<~[complex::Cmplx<
 			// pass pointer to buffer - *mut u8
 			kiss_fft_alloc(blockSize as i32, fwd as i32, vec::raw::to_ptr(kissFFTState), &size);
 		}
-		loop {
+		'fft : loop {
 			let mut din = pin.recv();
 			if (din.len() == 0) { break};
 			assert_eq!(din.len(), blockSize as uint);
-			//out.reserve(blockSize as uint);
 			unsafe {
 			kissFFTWorker(cast::transmute(vec::raw::to_mut_ptr(kissFFTState)), vec::raw::to_ptr(din), vec::raw::to_mut_ptr(din));
 			}
-			cout.send(din.iter().map(|&x: &complex::Complex32| x.scale(1.0/(blockSize as f32))).collect());
+			cout.send(din.iter().map(|&x: &complex::Complex64| x.scale(1.0/(blockSize as f64))).collect());
 		}
 		unsafe { kiss_fft_cleanup(); }
 	}

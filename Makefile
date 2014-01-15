@@ -1,8 +1,6 @@
 all:
-	gcc -Wall -fPIC -c *.c -Dkiss_fft_scalar=float -o kiss_fft.o
+	gcc -Wall -fPIC -c *.c -Dkiss_fft_scalar=double -o kiss_fft.o
 	gcc -shared -Wl,-soname,libkissfft.so -o libkissfft.so kiss_fft.o
-	mkdir -p ~/.rust/lib/x86_64-unknown-linux-gnu
-	mv libkissfft.so ~/.rust/lib/x86_64-unknown-linux-gnu
 
 testSO:
 	gcc -o doit ./test/test_vs_dft.c -I./ -lm -Wall -lkissfft
