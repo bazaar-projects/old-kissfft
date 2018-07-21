@@ -10,9 +10,9 @@ import sys
 import os
 import random
 import struct
-import popen2
 import getopt
 import numpy
+import subprocess
 
 pi=math.pi
 e=math.e
@@ -40,19 +40,19 @@ elif datatype=='float':
 else:
     sys.stderr.write('unrecognized datatype %s\n' % datatype)
     sys.exit(1)
- 
+
 
 def dopack(x,cpx=1):
     x = numpy.reshape( x, ( numpy.size(x),) )
-    
+
     if cpx:
-        s = ''.join( [ struct.pack(fmt*2,c.real,c.imag) for c in x ] )
+        s = b''.join( [ struct.pack(fmt*2,c.real,c.imag) for c in x ] )
     else:
-        s = ''.join( [ struct.pack(fmt,c.real) for c in x ] )
+        s = b''.join( [ struct.pack(fmt,c.real) for c in x ] )
     return s
 
 def dounpack(x,cpx):
-    uf = fmt * ( len(x) / struct.calcsize(fmt) )
+    uf = fmt * int( len(x) / struct.calcsize(fmt) )
     s = struct.unpack(uf,x)
     if cpx:
         return numpy.array(s[::2]) + numpy.array( s[1::2] )*j
@@ -94,8 +94,8 @@ def test_fft(ndims):
         xver = numpy.fft.rfftn(x)
     else:
         xver = numpy.fft.fftn(x)
-    
-    open('/tmp/fftexp.dat','w').write(dopack( flatten(xver) , True ) )
+
+    open('/tmp/fftexp.dat','wb').write(dopack( flatten(xver) , True ) )
 
     x2=dofft(x,doreal)
     err = xver - x2
@@ -104,14 +104,14 @@ def test_fft(ndims):
     errpow = numpy.vdot(errf,errf)+1e-10
     sigpow = numpy.vdot(xverf,xverf)+1e-10
     snr = 10*math.log10(abs(sigpow/errpow) )
-    print 'SNR (compared to NumPy) : %.1fdB' % float(snr)
+    print('SNR (compared to NumPy) : %.1fdB' % float(snr))
 
     if snr<minsnr:
-        print 'xver=',xver
-        print 'x2=',x2
-        print 'err',err
+        print('xver=',xver)
+        print('x2=',x2)
+        print('err',err)
         sys.exit(1)
- 
+
 def dofft(x,isreal):
     dims=list( numpy.shape(x) )
     x = flatten(x)
@@ -129,16 +129,15 @@ def dofft(x,isreal):
     if doreal:
         cmd += ' -R '
 
-    print cmd
-    p = popen2.Popen3(cmd )
+    print(cmd)
+    p = subprocess.Popen(cmd.split(), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
-    open('/tmp/fftin.dat','w').write(dopack( x , isreal==False ) )
+    open('/tmp/fftin.dat','wb').write(dopack( x , isreal==False ) )
 
-    p.tochild.write( dopack( x , isreal==False ) )
-    p.tochild.close()
+    p_stdout = p.communicate( dopack( x , isreal==False ) )[0]
 
-    res = dounpack( p.fromchild.read() , 1 )
-    open('/tmp/fftout.dat','w').write(dopack( flatten(res) , True ) )
+    res = dounpack( p_stdout, 1 )
+    open('/tmp/fftout.dat','wb').write(dopack( flatten(res) , True ) )
     if doreal:
         dims[-1] = int( dims[-1]/2 ) + 1
 
@@ -152,12 +151,12 @@ def main():
     opts=dict(opts)
 
     global doreal
-    doreal = opts.has_key('-r')
+    doreal = '-r' in opts
 
     if doreal:
-        print 'Testing multi-dimensional real FFTs'
+        print('Testing multi-dimensional real FFTs')
     else:
-        print 'Testing multi-dimensional FFTs'
+        print('Testing multi-dimensional FFTs')
 
     for dim in range(1,4):
         test_fft( dim )
